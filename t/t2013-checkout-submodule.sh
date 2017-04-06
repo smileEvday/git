@@ -3,6 +3,7 @@
 test_description='checkout can handle submodules'
 
 . ./test-lib.sh
+. "$TEST_DIRECTORY"/lib-submodule-update.sh
 
 test_expect_success 'setup' '
 	mkdir submodule &&
@@ -61,5 +62,15 @@ test_expect_success '"checkout <submodule>" honors submodule.*.ignore from .git/
 	git checkout HEAD >actual 2>&1 &&
 	! test -s actual
 '
+
+KNOWN_FAILURE_DIRECTORY_SUBMODULE_CONFLICTS=1
+KNOWN_FAILURE_SUBMODULE_RECURSIVE_NESTED=1
+test_submodule_switch_recursing "git checkout --recurse-submodules"
+
+test_submodule_forced_switch_recursing "git checkout -f --recurse-submodules"
+
+test_submodule_switch "git checkout"
+
+test_submodule_forced_switch "git checkout -f"
 
 test_done

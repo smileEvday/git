@@ -61,8 +61,7 @@ const char *write_idx_file(const char *index_name, struct pack_idx_entry **objec
 			if (objects[i]->offset > last_obj_offset)
 				last_obj_offset = objects[i]->offset;
 		}
-		qsort(sorted_by_sha, nr_objects, sizeof(sorted_by_sha[0]),
-		      sha1_compare);
+		QSORT(sorted_by_sha, nr_objects, sha1_compare);
 	}
 	else
 		sorted_by_sha = list = last = NULL;
@@ -288,13 +287,12 @@ char *index_pack_lockfile(int ip_out)
 	 * case, we need it to remove the corresponding .keep file
 	 * later on.  If we don't get that then tough luck with it.
 	 */
-	if (read_in_full(ip_out, packname, 46) == 46 && packname[45] == '\n' &&
-	    memcmp(packname, "keep\t", 5) == 0) {
-		char path[PATH_MAX];
+	if (read_in_full(ip_out, packname, 46) == 46 && packname[45] == '\n') {
+		const char *name;
 		packname[45] = 0;
-		snprintf(path, sizeof(path), "%s/pack/pack-%s.keep",
-			 get_object_directory(), packname + 5);
-		return xstrdup(path);
+		if (skip_prefix(packname, "keep\t", &name))
+			return xstrfmt("%s/pack/pack-%s.keep",
+				       get_object_directory(), name);
 	}
 	return NULL;
 }
@@ -306,7 +304,8 @@ char *index_pack_lockfile(int ip_out)
  *  - each byte afterwards: low seven bits are size continuation,
  *    with the high bit being "size continues"
  */
-int encode_in_pack_object_header(enum object_type type, uintmax_t size, unsigned char *hdr)
+int encode_in_pack_object_header(unsigned char *hdr, int hdr_len,
+				 enum object_type type, uintmax_t size)
 {
 	int n = 1;
 	unsigned char c;
@@ -317,6 +316,8 @@ int encode_in_pack_object_header(enum object_type type, uintmax_t size, unsigned
 	c = (type << 4) | (size & 15);
 	size >>= 4;
 	while (size) {
+		if (n == hdr_len)
+			die("object size is too enormous to format");
 		*hdr++ = c | 0x80;
 		c = size & 0x7f;
 		size >>= 7;
@@ -336,7 +337,7 @@ struct sha1file *create_tmp_packfile(char **pack_tmp_name)
 	return sha1fd(fd, *pack_tmp_name);
 }
 
-void finish_tmp_packfile(char *name_buffer,
+void finish_tmp_packfile(struct strbuf *name_buffer,
 			 const char *pack_tmp_name,
 			 struct pack_idx_entry **written_list,
 			 uint32_t nr_written,
@@ -344,7 +345,7 @@ void finish_tmp_packfile(char *name_buffer,
 			 unsigned char sha1[])
 {
 	const char *idx_tmp_name;
-	char *end_of_name_prefix = strrchr(name_buffer, 0);
+	int basename_len = name_buffer->len;
 
 	if (adjust_shared_perm(pack_tmp_name))
 		die_errno("unable to make temporary pack file readable");
@@ -354,17 +355,18 @@ void finish_tmp_packfile(char *name_buffer,
 	if (adjust_shared_perm(idx_tmp_name))
 		die_errno("unable to make temporary index file readable");
 
-	sprintf(end_of_name_prefix, "%s.pack", sha1_to_hex(sha1));
-	free_pack_by_name(name_buffer);
+	strbuf_addf(name_buffer, "%s.pack", sha1_to_hex(sha1));
 
-	if (rename(pack_tmp_name, name_buffer))
+	if (rename(pack_tmp_name, name_buffer->buf))
 		die_errno("unable to rename temporary pack file");
 
-	sprintf(end_of_name_prefix, "%s.idx", sha1_to_hex(sha1));
-	if (rename(idx_tmp_name, name_buffer))
+	strbuf_setlen(name_buffer, basename_len);
+
+	strbuf_addf(name_buffer, "%s.idx", sha1_to_hex(sha1));
+	if (rename(idx_tmp_name, name_buffer->buf))
 		die_errno("unable to rename temporary index file");
 
-	*end_of_name_prefix = '\0';
+	strbuf_setlen(name_buffer, basename_len);
 
 	free((void *)idx_tmp_name);
 }

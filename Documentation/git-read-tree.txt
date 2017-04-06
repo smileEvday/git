@@ -57,7 +57,7 @@ OPTIONS
 -n::
 --dry-run::
 	Check if the command would error out, without updating the index
-	nor the files in the working tree for real.
+	or the files in the working tree for real.
 
 -v::
 	Show the progress of checking files out.
@@ -114,6 +114,12 @@ OPTIONS
 	file itself, and you need write permission to the
 	directories the index file and index output file are
 	located in.
+
+--[no-]recurse-submodules::
+	Using --recurse-submodules will update the content of all initialized
+	submodules according to the commit recorded in the superproject by
+	calling read-tree recursively, also setting the submodules HEAD to be
+	detached at that commit.
 
 --no-sparse-checkout::
 	Disable sparse checkout support even if `core.sparseCheckout`
@@ -283,7 +289,7 @@ merge. The different stages represent the "result tree" (stage 0, aka
 you are trying to merge (stage 2 and 3 respectively).
 
 The order of stages 1, 2 and 3 (hence the order of three
-<tree-ish> command line arguments) are significant when you
+<tree-ish> command-line arguments) are significant when you
 start a 3-way merge with an index file that is already
 populated.  Here is an outline of how the algorithm works:
 
